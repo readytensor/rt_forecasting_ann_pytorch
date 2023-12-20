@@ -106,7 +106,7 @@ def run_batch_predictions(
         validated_train_data = validate_data(
             data=train_data, data_schema=data_schema, is_train=True
         )
-        
+
         # we need the test data to return our final predictions with right columns
         logger.info("Loading test data...")
         test_data = read_csv_in_directory(file_dir_path=test_dir)

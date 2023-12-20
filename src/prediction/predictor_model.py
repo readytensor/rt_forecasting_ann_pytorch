@@ -56,7 +56,7 @@ def get_activation(activation: str) -> Callable:
     elif activation == "none":
         return lambda x: x  # Identity function, doesn't change input
     else:
-        raise Exception(
+        raise ValueError(
             f"Error: Unrecognized activation type: {activation}. "
             "Must be one of ['relu', 'tanh', 'none']."
         )
