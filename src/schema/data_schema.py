@@ -3,7 +3,7 @@ from typing import Dict, List, Tuple
 
 import joblib
 
-from data_models.schema_validator import validate_schema_dict
+from data_models.schema_validator import validate_schema_dict, Frequency
 from utils import read_json_as_dict
 
 SCHEMA_FILE_NAME = "schema.joblib"
@@ -95,12 +95,12 @@ class ForecastingSchema:
         return self.schema["encoding"]
 
     @property
-    def frequency(self) -> str:
+    def frequency(self) -> Frequency:
         """
         Gets the frequency of the data.
 
         Returns:
-            str: The frequency of the day.
+            Frequency: The frequency of the day.
         """
         return self.schema["frequency"]
 
