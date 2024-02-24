@@ -18,7 +18,7 @@ from torch.utils.data import Dataset, DataLoader
 import torch.nn.functional as F
 
 # Check for GPU availability
-device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 print("device used: ", device)
 
@@ -27,7 +27,6 @@ MODEL_PARAMS_FNAME = "model_params.save"
 MODEL_WTS_FNAME = "model_wts.save"
 HISTORY_FNAME = "history.json"
 COST_THRESHOLD = float("inf")
-
 
 
 def get_activation(activation: str) -> Callable:
@@ -60,6 +59,7 @@ def get_activation(activation: str) -> Callable:
             f"Error: Unrecognized activation type: {activation}. "
             "Must be one of ['relu', 'tanh', 'none']."
         )
+
 
 def get_patience_factor(N):
     # magic number - just picked through trial and error
@@ -97,13 +97,7 @@ class CustomDataset(Dataset):
 
 
 class Net(Module):
-    def __init__(
-            self,
-            encode_len,
-            decode_len,
-            feat_dim,
-            activation
-        ):
+    def __init__(self, encode_len, decode_len, feat_dim, activation):
         super(Net, self).__init__()
         self.encode_len = encode_len
         self.decode_len = decode_len
@@ -112,8 +106,8 @@ class Net(Module):
         self.hidden_dim2 = int(self.decode_len * 1.5)
         self.hidden_dim3 = self.decode_len
         self.activation = get_activation(activation)
-        
-        self.hid1 = Linear(self.encode_len*self.feat_dim, self.hidden_dim1)
+
+        self.hid1 = Linear(self.encode_len * self.feat_dim, self.hidden_dim1)
         self.hid2 = Linear(self.hidden_dim1, self.hidden_dim2)
         self.hid3 = Linear(self.hidden_dim2, self.hidden_dim3)
         self.oupt = Linear(self.hidden_dim3, self.decode_len)
@@ -139,11 +133,11 @@ class Net(Module):
         return x
 
     def get_num_parameters(self):
-        pp=0
+        pp = 0
         for p in list(self.parameters()):
-            nn=1
+            nn = 1
             for s in list(p.size()):
-                nn = nn*s
+                nn = nn * s
             pp += nn
         return pp
 
@@ -154,16 +148,12 @@ class Forecaster:
     This class provides a consistent interface that can be used with other
     Forecaster models.
     """
+
     MODEL_NAME = "ANN_Timeseries_Forecaster"
 
     def __init__(
-            self,
-            encode_len:int,
-            decode_len:int,
-            feat_dim:int,
-            activation:str,
-            **kwargs
-        ):
+        self, encode_len: int, decode_len: int, feat_dim: int, activation: str, **kwargs
+    ):
         """Construct a new CNN Forecaster."""
         self.encode_len = encode_len
         self.decode_len = decode_len
@@ -172,21 +162,21 @@ class Forecaster:
         self.batch_size = None  # calculated based on size of train data
 
         self.net = Net(
-            encode_len = self.encode_len,
-            decode_len = self.decode_len,
-            feat_dim = self.feat_dim,
-            activation=self.activation
+            encode_len=self.encode_len,
+            decode_len=self.decode_len,
+            feat_dim=self.feat_dim,
+            activation=self.activation,
         )
         self.net.to(device)
         # print(self.net.get_num_parameters()) ; sys.exit()
         self.criterion = MSELoss()
-        self.optimizer = optim.Adam( self.net.parameters() )
+        self.optimizer = optim.Adam(self.net.parameters())
         self.print_period = 1
 
-    def _get_X_and_y(self, data: np.ndarray, is_train:bool=True) -> np.ndarray:
-        """Extract X (historical target series), y (forecast window target) 
-            When is_train is True, data contains both history and forecast windows.
-            When False, only history is contained.
+    def _get_X_and_y(self, data: np.ndarray, is_train: bool = True) -> np.ndarray:
+        """Extract X (historical target series), y (forecast window target)
+        When is_train is True, data contains both history and forecast windows.
+        When False, only history is contained.
         """
         N, T, D = data.shape
         if D != self.feat_dim:
@@ -200,8 +190,8 @@ class Forecaster:
                     f"Training data expected to have {self.encode_len + self.decode_len}"
                     f" length on axis 1. Found length {T}"
                 )
-            X = data[:, :self.encode_len, :]
-            y = data[:, self.encode_len:, 0]
+            X = data[:, : self.encode_len, :]
+            y = data[:, self.encode_len :, 0]
         else:
             # for inference
             if T < self.encode_len:
@@ -209,19 +199,18 @@ class Forecaster:
                     f"Inference data length expected to be >= {self.encode_len}"
                     f" on axis 1. Found length {T}"
                 )
-            X = data[:, -self.encode_len:, :]
+            X = data[:, -self.encode_len :, :]
             y = None
         return X, y
 
     def fit(self, train_data, valid_data, max_epochs=250, verbose=1):
         train_X, train_y = self._get_X_and_y(train_data, is_train=True)
         if valid_data is not None:
-            valid_X, valid_y = self._get_X_and_y(
-                valid_data, is_train=True)
+            valid_X, valid_y = self._get_X_and_y(valid_data, is_train=True)
         else:
             valid_X, valid_y = None, None
 
-        self.batch_size = min(train_X.shape[0] // 8, 256)
+        self.batch_size = max(1, min(train_X.shape[0] // 8, 256))
         print(f"batch_size = {self.batch_size}")
 
         patience = get_patience_factor(train_X.shape[0])
@@ -230,31 +219,45 @@ class Forecaster:
         train_X, train_y = torch.FloatTensor(train_X), torch.FloatTensor(train_y)
         train_dataset = CustomDataset(train_X, train_y)
         train_loader = DataLoader(
-            dataset=train_dataset, batch_size=int(self.batch_size), shuffle=True)
-        
+            dataset=train_dataset, batch_size=int(self.batch_size), shuffle=True
+        )
+
         if valid_X is not None and valid_y is not None:
             valid_X, valid_y = torch.FloatTensor(valid_X), torch.FloatTensor(valid_y)
             valid_dataset = CustomDataset(valid_X, valid_y)
             valid_loader = DataLoader(
-                dataset=valid_dataset, batch_size=int(self.batch_size),  shuffle=True)
+                dataset=valid_dataset, batch_size=int(self.batch_size), shuffle=True
+            )
         else:
             valid_loader = None
 
-        losses = self._run_training(train_loader, valid_loader, max_epochs,
-                           use_early_stopping=True, patience=patience,
-                           verbose=verbose)
+        losses = self._run_training(
+            train_loader,
+            valid_loader,
+            max_epochs,
+            use_early_stopping=True,
+            patience=patience,
+            verbose=verbose,
+        )
         return losses
-    
-    def _run_training(self, train_loader, valid_loader, max_epochs,
-                      use_early_stopping=True, patience=10, verbose=1):
-        
+
+    def _run_training(
+        self,
+        train_loader,
+        valid_loader,
+        max_epochs,
+        use_early_stopping=True,
+        patience=10,
+        verbose=1,
+    ):
+
         best_loss = 1e7
         losses = []
         min_epochs = 10
         for epoch in range(max_epochs):
             self.net.train()
             for data in train_loader:
-                X,  y = data[0].to(device), data[1].to(device)
+                X, y = data[0].to(device), data[1].to(device)
                 # Feed Forward
                 preds = self.net(X)
                 # Loss Calculation
@@ -271,7 +274,9 @@ class Forecaster:
             if use_early_stopping:
                 # Early stopping
                 if valid_loader is not None:
-                    current_loss = get_loss(self.net, device, valid_loader, self.criterion)
+                    current_loss = get_loss(
+                        self.net, device, valid_loader, self.criterion
+                    )
                 losses.append({"epoch": epoch, "loss": current_loss})
                 if current_loss < best_loss:
                     trigger_times = 0
@@ -280,38 +285,38 @@ class Forecaster:
                     trigger_times += 1
                     if trigger_times >= patience and epoch >= min_epochs:
                         if verbose == 1:
-                            print(f'Early stopping after {epoch=}!')
+                            print(f"Early stopping after {epoch=}!")
                         return losses
             else:
                 losses.append({"epoch": epoch, "loss": current_loss})
             # Show progress
             if verbose == 1:
-                if epoch % self.print_period == 0 or epoch == max_epochs-1:
-                    print(f'Epoch: {epoch+1}/{max_epochs}, loss: {np.round(current_loss, 5)}')
+                if epoch % self.print_period == 0 or epoch == max_epochs - 1:
+                    print(
+                        f"Epoch: {epoch+1}/{max_epochs}, loss: {np.round(current_loss, 5)}"
+                    )
 
         return losses
-
 
     def predict(self, data):
         X = self._get_X_and_y(data, is_train=False)[0]
         pred_X = torch.FloatTensor(X)
         # Initialize dataset and dataloader with only X
         pred_dataset = CustomDataset(pred_X)
-        pred_loader = DataLoader(
-            dataset=pred_dataset, batch_size=32, shuffle=False)
+        pred_loader = DataLoader(dataset=pred_dataset, batch_size=32, shuffle=False)
 
         all_preds = []
         for data in pred_loader:
             # Get X and send it to the device
             X = data.to(device)
             preds = self.net(X).detach().cpu().numpy()
-            preds = preds[:, -self.decode_len:]
+            preds = preds[:, -self.decode_len :]
             all_preds.append(preds)
 
         preds = np.concatenate(all_preds, axis=0)
         preds = np.expand_dims(preds, axis=-1)
         return preds
-    
+
     def evaluate(self, test_data):
         """Evaluate the model and return the loss and metrics"""
         x_test, y_test = self._get_X_and_y(test_data, is_train=True)
@@ -322,23 +327,23 @@ class Forecaster:
             current_loss = get_loss(self.net, device, data_loader, self.criterion)
             return current_loss
 
-
     def save(self, model_path):
         model_params = {
-            "encode_len": self.encode_len, 
-            "decode_len": self.decode_len, 
-            "feat_dim": self.feat_dim, 
-            "activation": self.activation
+            "encode_len": self.encode_len,
+            "decode_len": self.decode_len,
+            "feat_dim": self.feat_dim,
+            "activation": self.activation,
         }
         joblib.dump(model_params, os.path.join(model_path, MODEL_PARAMS_FNAME))
         torch.save(self.net.state_dict(), os.path.join(model_path, MODEL_WTS_FNAME))
-
 
     @classmethod
     def load(cls, model_path):
         model_params = joblib.load(os.path.join(model_path, MODEL_PARAMS_FNAME))
         classifier = cls(**model_params)
-        classifier.net.load_state_dict(torch.load( os.path.join(model_path, MODEL_WTS_FNAME)))        
+        classifier.net.load_state_dict(
+            torch.load(os.path.join(model_path, MODEL_WTS_FNAME))
+        )
         return classifier
 
     def __str__(self):
@@ -377,9 +382,7 @@ def train_predictor_model(
     return model
 
 
-def predict_with_model(
-    model: Forecaster, test_data: np.ndarray
-) -> np.ndarray:
+def predict_with_model(model: Forecaster, test_data: np.ndarray) -> np.ndarray:
     """
     Make forecast.
 
@@ -436,24 +439,22 @@ def evaluate_predictor_model(
     return model.evaluate(x_test, y_test)
 
 
+if __name__ == "__main__":
 
-if __name__ == "__main__":     
-    
     N = 100
     T = 25
     D = 3
-    
+
     model = Net(
         feat_dim=D,
         latent_dim=13,
         n_cnnlayers=2,
         decode_len=10,
-        activation='relu',
+        activation="relu",
     )
     model.to(device=device)
-    
-    
+
     X = torch.from_numpy(np.random.randn(N, T, D).astype(np.float32)).to(device)
-    
+
     preds = model(X)
     print(preds.shape)
